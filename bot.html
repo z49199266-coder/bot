@@ -80,18 +80,18 @@
       <button class="btn btn-ghost" id="btnForget" type="button">🗑 حذف التوكن</button>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
-      <label style="flex:1;min-width:220px">🌉 رابط الجسر (Cloudflare Worker)
+      <label style="flex:1;min-width:220px">🌉 رابط الجسر (اتركه فارغًا للاتصال المباشر)
         <input type="text" id="bridgeInput" placeholder="https://zakobot.xxxxx.workers.dev" spellcheck="false" style="direction:ltr;font-family:monospace" />
       </label>
       <button class="btn btn-ghost" id="btnBridge" type="button">💾 حفظ وإعادة الاتصال</button>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
-      <label style="flex:1;min-width:220px">🆔 App ID (من تطبيقك في ديريف)
-        <input type="text" id="appIdInput" placeholder="الصق App ID هنا..." spellcheck="false" style="direction:ltr;font-family:monospace" />
+      <label style="flex:1;min-width:220px">🆔 App ID (اتركه 1089 للعام)
+        <input type="text" id="appIdInput" placeholder="1089" spellcheck="false" style="direction:ltr;font-family:monospace" />
       </label>
       <button class="btn btn-ghost" id="btnAppId" type="button">💾 حفظ وإعادة الاتصال</button>
     </div>
-    <p class="note">البوت يتصل بديريف عبر الجسر — يتجاوز حجب الشبكة نهائيًا.</p>
+    <p class="note">البوت يجرب الجسر ثم 8 مضيفات ديريف مباشرة تلقائيًا — يتجاوز الحجب الجزئي.</p>
     <p class="warn yellow">
       ⚠️ التوكن = مفتاح حسابك. لا ترسله لأحد أبدًا.
       أنشئ توكن <b>تجريبي أولًا</b>: من dtrader بدّل لحساب Demo ← ثم app.deriv.com/account/api-token ← أنشئ توكن بصلاحيات <b>Read + Trade</b>.
@@ -185,7 +185,7 @@
   };
 
   /* ===== اتصال WebSocket عبر جسر Cloudflare ===== */
-  var DEFAULT_APP_ID = "34yBwBOvmiX7ImtEdFfGz";
+  var DEFAULT_APP_ID = "1089";
   var appId = (store.get("deriv_app_id") || DEFAULT_APP_ID).replace(/[^A-Za-z0-9]/g, "") || DEFAULT_APP_ID;
   var bridge = (function () {
     var s = store.get("deriv_bridge") || "";
@@ -201,8 +201,12 @@
       list.push(b + "/?app_id=" + appId);
       list.push(b + "/?app_id=1089");
     }
-    list.push("wss://ws.derivws.com/websockets/v3?app_id=" + appId);
-    list.push("wss://ws.derivws.com/websockets/v3?app_id=1089");
+    /* 8 مضيفات ديريف بديلة للاتصال المباشر - يتجاوز الحجب الجزئي */
+    var hosts = ["ws.derivws.com", "ws.binaryws.com", "ws.binary.com", "ws3.derivws.com", "ws4.derivws.com", "ws5.derivws.com", "ws6.derivws.com", "ws7.derivws.com"];
+    for (var i = 0; i < hosts.length; i++) {
+      list.push("wss://" + hosts[i] + "/websockets/v3?app_id=" + appId);
+      list.push("wss://" + hosts[i] + "/websockets/v3?app_id=1089");
+    }
     return list;
   }
   var ENDPOINTS = buildEndpoints();
@@ -227,7 +231,7 @@
     ws.onclose = function () {
       var was = wsReady; wsReady = false;
       if (was) { diag("⚠️ انقطع الاتصال — إعادة خلال ثانيتين…"); setTimeout(connect, 2000); }
-      else { diag("❌ المخرج رفض/أُغلق قبل الفتح — تجربة التالي…"); nextEndpoint(); }
+      else { diag("❌ المخرج " + ((epIdx % ENDPOINTS.length) + 1) + "/" + ENDPOINTS.length + " رفض — التالي…"); nextEndpoint(); }
     };
     ws.onerror = function () { wsReady = false; };
     ws.onmessage = function (ev) {
@@ -633,6 +637,7 @@
 
     el("btnBridge").addEventListener("click", function () {
       var v = (el("bridgeInput").value || "").trim();
+      if (!v) { store.del("deriv_bridge"); bridge = null; ENDPOINTS = buildEndpoints(); epIdx = 0; failCount = 0; try { ws.onclose = null; ws.close(); } catch (e) { } wsReady = false; diag("🔄 أُلغي الجسر — اتصال مباشر الآن..."); setTimeout(connect, 500); return; }
       var m = v.match(/https:\/\/[a-zA-Z0-9.\-]+workers\.dev/) || v.match(/[a-zA-Z0-9\-]+\.workers\.dev/);
       if (!m) { alert("لم أجد رابط workers.dev في النص — الصق الرابط فقط: https://zakobot.z49199266.workers.dev"); return; }
       v = m[0];
