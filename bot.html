@@ -186,13 +186,18 @@
 
   /* ===== اتصال WebSocket عبر جسر Cloudflare ===== */
   var DEFAULT_APP_ID = "34yBwBOvmiX7ImtEdFfGz";
-  var appId = store.get("deriv_app_id") || DEFAULT_APP_ID;
-  var bridge = store.get("deriv_bridge");
+  var appId = (store.get("deriv_app_id") || DEFAULT_APP_ID).replace(/[^A-Za-z0-9]/g, "") || DEFAULT_APP_ID;
+  var bridge = (function () {
+    var s = store.get("deriv_bridge") || "";
+    var m = s.match(/https:\/\/[a-zA-Z0-9.\-]+workers\.dev/) || s.match(/[a-zA-Z0-9\-]+\.workers\.dev/);
+    return m ? m[0] : null;
+  })();
 
   function buildEndpoints() {
     var list = [];
     if (bridge) {
-      var b = bridge.replace(/\/+$/, "");
+      var b = bridge.replace(/\/+$/, "").replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+      if (b.indexOf("wss://") !== 0 && b.indexOf("ws://") !== 0) b = "wss://" + b;
       list.push(b + "/?app_id=" + appId);
       list.push(b + "/?app_id=1089");
     }
@@ -627,9 +632,11 @@
     if (bridge) el("bridgeInput").value = bridge;
 
     el("btnBridge").addEventListener("click", function () {
-      var v = el("bridgeInput").value.trim();
-      if (!v || v.indexOf("workers.dev") === -1) { alert("الصق رابط الجسر كاملًا (ينتهي بـ workers.dev)"); return; }
-      if (v.indexOf("http") !== 0) v = "https://" + v;
+      var v = (el("bridgeInput").value || "").trim();
+      var m = v.match(/https:\/\/[a-zA-Z0-9.\-]+workers\.dev/) || v.match(/[a-zA-Z0-9\-]+\.workers\.dev/);
+      if (!m) { alert("لم أجد رابط workers.dev في النص — الصق الرابط فقط: https://zakobot.z49199266.workers.dev"); return; }
+      v = m[0];
+      el("bridgeInput").value = v;
       store.set("deriv_bridge", v);
       bridge = v;
       ENDPOINTS = buildEndpoints();
