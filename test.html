@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🔍 فحص اتصال ديريف</title>
+<style>
+  body { font-family: Tahoma, Arial, sans-serif; background:#0b1220; color:#e8eefb; padding:20px; line-height:1.6; }
+  h1 { font-size:1.1rem; margin-bottom:6px; }
+  .sub { color:#93a3c0; font-size:0.8rem; margin-bottom:16px; }
+  .row { background:#152238; border:1px solid #1f2f4a; border-radius:10px; padding:12px 14px; margin:8px 0; font-size:0.85rem; }
+  .row .name { font-weight:800; }
+  .row .st { font-weight:800; }
+  .ok { color:#22c55e; }
+  .bad { color:#ef4444; }
+  .wait { color:#eab308; }
+  .url { color:#93a3c0; font-size:0.72rem; direction:ltr; text-align:left; font-family:monospace; }
+  .note { margin-top:14px; font-size:0.75rem; color:#93a3c0; }
+</style>
+</head>
+<body>
+<h1>🔍 فحص اتصال ديريف</h1>
+<p class="sub">انتظر حتى تكتمل كل الأسطر (10 ثوانٍ) ثم صوّر الشاشة أو انسخ النتائج</p>
+<div id="out"></div>
+<p class="note">السطر 1 اختبار أن WebSocket يعمل في جهازك أصلًا (سيرفر عام خارج ديريف) — إذا فشل هو أيضًا فالمشكلة في الجهاز/الشبكة وليست ديريف.</p>
+<script>
+var el = document.getElementById("out");
+var tests = [
+  { name: "1) اختبار عام — هل WebSocket يعمل أصلًا في جهازك؟", url: "wss://echo.websocket.org" },
+  { name: "2) ديريف + تطبيقك (34yBwBOvmiX7ImtEdFfGz)", url: "wss://ws.derivws.com/websockets/v3?app_id=34yBwBOvmiX7ImtEdFfGz" },
+  { name: "3) ديريف + تطبيقك عبر binaryws", url: "wss://ws.binaryws.com/websockets/v3?app_id=34yBwBOvmiX7ImtEdFfGz" },
+  { name: "4) ديريف + المعرف العام 1089", url: "wss://ws.derivws.com/websockets/v3?app_id=1089" },
+  { name: "5) ديريف + المعرف 16929 (Binary.com الرسمي)", url: "wss://ws.derivws.com/websockets/v3?app_id=16929" }
+];
+function addRow(t) {
+  var d = document.createElement("div");
+  d.className = "row";
+  d.innerHTML = '<div><span class="name">' + t.name + '</span> — <span class="st wait" id="st' + t.i + '">⏳ ينتظر…</span></div><div class="url">' + t.url + '</div>';
+  el.appendChild(d);
+}
+tests.forEach(function (t, i) {
+  t.i = i;
+  addRow(t);
+  var stEl = document.getElementById("st" + i);
+  var done = false;
+  try {
+    var w = new WebSocket(t.url);
+    var timer = setTimeout(function () {
+      if (!done) { done = true; try { w.close(); } catch (e) { } stEl.textContent = "⌛ مهلة (لا استجابة خلال 8 ثوان)"; stEl.className = "st wait"; }
+    }, 8000);
+    w.onopen = function () {
+      if (done) return; done = true; clearTimeout(timer);
+      stEl.textContent = "✅ متصل!"; stEl.className = "st ok";
+      try { w.close(); } catch (e) { }
+    };
+    w.onclose = function (ev) {
+      if (done) return; done = true; clearTimeout(timer);
+      stEl.textContent = "❌ أُغلق قبل الفتح (كود " + ev.code + ")"; stEl.className = "st bad";
+    };
+    w.onerror = function () {
+      if (done) return; done = true; clearTimeout(timer);
+      stEl.textContent = "❌ خطأ اتصال"; stEl.className = "st bad";
+    };
+  } catch (e) {
+    stEl.textContent = "❌ المتصفح رفض: " + String(e.message || e); stEl.className = "st bad";
+  }
+});
+</script>
+</body>
+</html>
