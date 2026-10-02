@@ -70,12 +70,8 @@
 
 <div class="container">
 
-  <!-- 1) التوكن -->
   <div class="panel">
     <h2>🔑 ربط حسابك (API Token)</h2>
-    <label style="margin-bottom:10px">🆔 App ID — معرّف التطبيق (من api.deriv.com)
-      <input type="text" id="appIdInput" spellcheck="false" style="direction:ltr;font-family:monospace" placeholder="34yBwBOvmiX7ImtEdFfGz" />
-    </label>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
       <label style="flex:1;min-width:220px">الصق التوكن هنا
         <input type="text" id="apiToken" placeholder="مثال: a1b2c3d4e5..." spellcheck="false" style="direction:ltr;font-family:monospace" />
@@ -83,13 +79,25 @@
       <button class="btn btn-ghost" id="btnConnect" type="button">🔌 اتصال</button>
       <button class="btn btn-ghost" id="btnForget" type="button">🗑 حذف التوكن</button>
     </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+      <label style="flex:1;min-width:220px">🌉 رابط الجسر (Cloudflare Worker)
+        <input type="text" id="bridgeInput" placeholder="https://zakobot.xxxxx.workers.dev" spellcheck="false" style="direction:ltr;font-family:monospace" />
+      </label>
+      <button class="btn btn-ghost" id="btnBridge" type="button">💾 حفظ وإعادة الاتصال</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+      <label style="flex:1;min-width:220px">🆔 App ID (من تطبيقك في ديريف)
+        <input type="text" id="appIdInput" placeholder="الصق App ID هنا..." spellcheck="false" style="direction:ltr;font-family:monospace" />
+      </label>
+      <button class="btn btn-ghost" id="btnAppId" type="button">💾 حفظ وإعادة الاتصال</button>
+    </div>
+    <p class="note">البوت يتصل بديريف عبر الجسر — يتجاوز حجب الشبكة نهائيًا.</p>
     <p class="warn yellow">
       ⚠️ التوكن = مفتاح حسابك. لا ترسله لأحد أبدًا.
       أنشئ توكن <b>تجريبي أولًا</b>: من dtrader بدّل لحساب Demo ← ثم app.deriv.com/account/api-token ← أنشئ توكن بصلاحيات <b>Read + Trade</b>.
     </p>
   </div>
 
-  <!-- 2) الإعدادات -->
   <div class="panel">
     <h2>⚙️ إعدادات البوت</h2>
     <div class="grid">
@@ -136,21 +144,18 @@
     <p class="note">صفقة واحدة في كل مرة • يفحص السوق كل 30 ثانية • يتوقف تلقائيًا عند حد الخسارة أو هدف الربح أو بلوغ عدد الصفقات</p>
   </div>
 
-  <!-- 3) التشغيل -->
   <div class="panel">
     <button class="btn btn-start" id="btnStart" disabled>▶ تشغيل البوت</button>
     <button class="btn btn-stop" id="btnStop" style="display:none">⏹ إيقاف طارئ — STOP</button>
     <div class="bot-state stopped" id="botState">البوت متوقف</div>
   </div>
 
-  <!-- 4) الإحصائيات -->
   <div class="panel">
     <h2>📊 حالة اليوم</h2>
     <div class="grid" id="statsGrid"></div>
     <div class="warn red" id="limitWarn" style="display:none"></div>
   </div>
 
-  <!-- 5) السجل -->
   <div class="panel">
     <h2>📓 سجل الصفقات (محفوظ في متصفحك)</h2>
     <div class="table-wrap" style="max-height:280px;overflow:auto">
@@ -179,15 +184,21 @@
     del: function (k) { try { localStorage.removeItem(k); } catch (e) { } }
   };
 
-  /* ===== اتصال WebSocket ===== */
-  var DEFAULT_APP_ID = "34yBwBOvmiX7ImtEdFfGz"; /* zakobotweb */
+  /* ===== اتصال WebSocket عبر جسر Cloudflare ===== */
+  var DEFAULT_APP_ID = "34yBwBOvmiX7ImtEdFfGz";
+  var appId = store.get("deriv_app_id") || DEFAULT_APP_ID;
+  var bridge = store.get("deriv_bridge");
+
   function buildEndpoints() {
-    var aid = (store.get("deriv_app_id") || DEFAULT_APP_ID).trim();
-    return [
-      "wss://ws.derivws.com/websockets/v3?app_id=" + aid,
-      "wss://ws.binaryws.com/websockets/v3?app_id=" + aid,
-      "wss://ws.derivws.com/websockets/v3?app_id=1089"
-    ];
+    var list = [];
+    if (bridge) {
+      var b = bridge.replace(/\/+$/, "");
+      list.push(b + "/?app_id=" + appId);
+      list.push(b + "/?app_id=1089");
+    }
+    list.push("wss://ws.derivws.com/websockets/v3?app_id=" + appId);
+    list.push("wss://ws.derivws.com/websockets/v3?app_id=1089");
+    return list;
   }
   var ENDPOINTS = buildEndpoints();
   var ws = null, wsReady = false, reqId = 1, pending = {}, epIdx = 0, failCount = 0;
@@ -287,7 +298,7 @@
     }
   }
 
-  /* ===== المؤشرات الفنية ===== */
+  /* ===== المؤشرات (نفس محرك المحلل) ===== */
   function ema(v, p) {
     var k = 2 / (p + 1), arr = [v[0]];
     for (var i = 1; i < v.length; i++) arr.push(v[i] * k + arr[i - 1] * (1 - k));
@@ -353,6 +364,7 @@
     });
   }
 
+  /* تحليل مبسط بنفس منطق المحلل — يعيد النتيجة والقوة */
   async function getSignal(symbol, frame) {
     var candles = await fetchCandles(symbol, frame, 120);
     var closes = candles.map(function (c) { return c.close; });
@@ -376,6 +388,7 @@
     if ((price - lv.support) / price < 0.004) score += 2;
     if ((lv.resist - price) / price < 0.004) score -= 2;
 
+    /* تأكيد الفريم الأعلى */
     var ht = 0;
     try {
       var hf = frame === 60 ? 300 : 900;
@@ -396,7 +409,7 @@
     return { dir: dir, strength: Math.min(Math.abs(score), 10), score: score, price: price };
   }
 
-  /* ===== السجل والإحصائيات ===== */
+  /* ===== حالة البوت والسجل ===== */
   var LOG_KEY = "deriv_bot_trades_v1";
   var bot = { active: false, openTrade: null, lastCheck: 0 };
 
@@ -476,7 +489,7 @@
     renderLog();
   }
 
-  /* ===== التنفيذ والتسوية ===== */
+  /* ===== تنفيذ الصفقة ===== */
   async function placeTrade(sig) {
     var stake = Math.max(0.35, parseFloat(el("setStake").value) || 0.35);
     var ticks = parseInt(el("setTicks").value, 10) || 5;
@@ -542,6 +555,7 @@
     } catch (e) { }
   }
 
+  /* ===== حلقة البوت ===== */
   function botTick() {
     if (!bot.active) return;
     refreshStats();
@@ -609,18 +623,34 @@
 
     var saved = store.get("deriv_api_token");
     if (saved) el("apiToken").value = saved;
-    var savedAid = store.get("deriv_app_id");
-    if (savedAid) el("appIdInput").value = savedAid; else el("appIdInput").value = DEFAULT_APP_ID;
+    el("appIdInput").value = appId;
+    if (bridge) el("bridgeInput").value = bridge;
 
-    el("appIdInput").addEventListener("change", function () {
-      var v = el("appIdInput").value.trim();
-      if (!v) { alert("لا يمكن ترك App ID فارغًا"); el("appIdInput").value = DEFAULT_APP_ID; return; }
-      store.set("deriv_app_id", v);
-      alert("تم حفظ App ID: " + v + "\nيُعاد الاتصال الآن…");
-      try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) { }
-      epIdx = 0; failCount = 0;
+    el("btnBridge").addEventListener("click", function () {
+      var v = el("bridgeInput").value.trim();
+      if (!v || v.indexOf("workers.dev") === -1) { alert("الصق رابط الجسر كاملًا (ينتهي بـ workers.dev)"); return; }
+      if (v.indexOf("http") !== 0) v = "https://" + v;
+      store.set("deriv_bridge", v);
+      bridge = v;
       ENDPOINTS = buildEndpoints();
-      connect();
+      epIdx = 0; failCount = 0;
+      try { ws.onclose = null; ws.close(); } catch (e) { }
+      wsReady = false;
+      diag("🔄 تم حفظ الجسر — إعادة الاتصال...");
+      setTimeout(connect, 500);
+    });
+
+    el("btnAppId").addEventListener("click", function () {
+      var v = el("appIdInput").value.trim();
+      if (!v) { alert("الصق الـ App ID أولًا"); return; }
+      store.set("deriv_app_id", v);
+      appId = v;
+      ENDPOINTS = buildEndpoints();
+      epIdx = 0; failCount = 0;
+      try { ws.onclose = null; ws.close(); } catch (e) { }
+      wsReady = false;
+      diag("🔄 تم حفظ App ID جديد — إعادة الاتصال...");
+      setTimeout(connect, 500);
     });
 
     el("btnConnect").addEventListener("click", function () {
@@ -660,7 +690,7 @@
     /* حلقة البوت: كل 30 ثانية */
     setInterval(function () {
       if (bot.active) botTick();
-      else if (bot.openTrade) settleOpenTrade(); /* سوّ الصفقة حتى لو أُوقف */
+      else if (bot.openTrade) settleOpenTrade();
     }, 30000);
 
     /* تسوية أسرع للصفقة المفتوحة: كل 8 ثوانٍ */
